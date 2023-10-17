@@ -1,7 +1,6 @@
-import { Button, chakra, Container, useToast } from '@chakra-ui/react';
+import { Button, chakra, Container } from '@chakra-ui/react';
 import React from 'react';
 import TicTacToeAreaController from '../../../../classes/interactable/TicTacToeAreaController';
-import { TicTacToeGridPosition } from '../../../../types/CoveyTownSocket';
 
 export type TicTacToeGameProps = {
   gameAreaController: TicTacToeAreaController;
@@ -23,16 +22,18 @@ const StyledTicTacToeSquare = chakra(Button, {
     },
   },
 });
+
 /**
  * A component that will render the TicTacToe board, styled
  */
 const StyledTicTacToeBoard = chakra(Container, {
   baseStyle: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)', // 3 columns
+    gridTemplateRows: 'repeat(3, 1fr)', // 3 rows
     width: '400px',
     height: '400px',
     padding: '5px',
-    flexWrap: 'wrap',
   },
 });
 
@@ -42,7 +43,7 @@ const StyledTicTacToeBoard = chakra(Container, {
  * Renders the TicTacToe board as a "StyledTicTacToeBoard", which consists of 9 "StyledTicTacToeSquare"s
  * (one for each cell in the board, starting from the top left and going left to right, top to bottom).
  * Each StyledTicTacToeSquare has an aria-label property that describes the cell's position in the board,
- * formatted as `Cell ${rowIndex},${colIndex}`.
+ * formatted as `Cell ${rowIndex},${colIndex`.
  *
  * The board is re-rendered whenever the board changes, and each cell is re-rendered whenever the value
  * of that cell changes.
@@ -55,65 +56,17 @@ const StyledTicTacToeBoard = chakra(Container, {
  * @param gameAreaController the controller for the TicTacToe game
  */
 export default function TicTacToeBoard({ gameAreaController }: TicTacToeGameProps): JSX.Element {
-  const toast = useToast();
-  const [isOurTurn, setIsOurTurn] = React.useState(gameAreaController.isOurTurn);
-
-  React.useEffect(() => {
-    const handleTurnChanged = (turn: boolean) => {
-      setIsOurTurn(turn);
-    };
-    gameAreaController.addListener('turnChanged', handleTurnChanged);
-
-    return () => {
-      gameAreaController.addListener('turnChanged', handleTurnChanged);
-    };
-  }, [gameAreaController]);
-
-  const handleCellClick = React.useCallback(
-    async (row: TicTacToeGridPosition, col: TicTacToeGridPosition) => {
-      if (gameAreaController.board[row][col]) {
-        toast({
-          title: 'Error',
-          description: 'Cell is already occupied!',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
-        return;
-      }
-
-      if (!gameAreaController.isPlayer || !isOurTurn) return;
-
-      try {
-        await gameAreaController.makeMove(row, col);
-      } catch (error) {
-        if (error instanceof Error) {
-          toast({
-            title: 'Error',
-            description: error.message,
-            status: 'error',
-            duration: 5000,
-            isClosable: true,
-          });
-        }
-      }
-    },
-    [gameAreaController, isOurTurn, toast],
-  );
-
   return (
     <StyledTicTacToeBoard aria-label='Tic-Tac-Toe Board'>
-      <StyledTicTacToeSquare aria-label='Cell 0,0'>
-        {gameAreaController.board[0][0]}
-      </StyledTicTacToeSquare>
-      <StyledTicTacToeSquare aria-label='Cell 0,1'></StyledTicTacToeSquare>
-      <StyledTicTacToeSquare aria-label='Cell 0,2'></StyledTicTacToeSquare>
-      <StyledTicTacToeSquare aria-label='Cell 1,0'></StyledTicTacToeSquare>
-      <StyledTicTacToeSquare aria-label='Cell 1,1'></StyledTicTacToeSquare>
-      <StyledTicTacToeSquare aria-label='Cell 1,2'></StyledTicTacToeSquare>
-      <StyledTicTacToeSquare aria-label='Cell 2,0'></StyledTicTacToeSquare>
-      <StyledTicTacToeSquare aria-label='Cell 2,1'></StyledTicTacToeSquare>
-      <StyledTicTacToeSquare aria-label='Cell 2,2'></StyledTicTacToeSquare>
+      {gameAreaController.board.map((row, rowIndex) =>
+        row.map((cellValue, colIndex) => (
+          <StyledTicTacToeSquare
+            key={`${rowIndex}-${colIndex}`}
+            aria-label={`Cell ${rowIndex},${colIndex}`}>
+            {cellValue}
+          </StyledTicTacToeSquare>
+        )),
+      )}
     </StyledTicTacToeBoard>
   );
 }

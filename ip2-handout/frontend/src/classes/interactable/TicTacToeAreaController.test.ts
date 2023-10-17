@@ -328,7 +328,7 @@ describe('[T1] TicTacToeAreaController', () => {
           x: ourPlayer.id,
           o: otherPlayers[0].id,
         });
-        (controller as any)._instanceID = 'some-mock-id';
+        controller._instanceID = 'some-mock-id';
         await controller.makeMove(0 as TicTacToeGridPosition, 0 as TicTacToeGridPosition);
         expect(mockTownController.sendInteractableCommand).toHaveBeenCalled();
       });
