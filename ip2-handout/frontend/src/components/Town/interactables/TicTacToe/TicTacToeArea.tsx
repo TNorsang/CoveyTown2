@@ -1,11 +1,23 @@
-import { Modal, ModalCloseButton, ModalContent, ModalHeader, ModalOverlay } from '@chakra-ui/react';
-import React, { useCallback } from 'react';
+import {
+  Button,
+  List,
+  ListItem,
+  Modal,
+  ModalCloseButton,
+  ModalContent,
+  ModalHeader,
+  ModalOverlay,
+  useToast,
+} from '@chakra-ui/react';
+import React, { useCallback, useEffect, useState } from 'react';
 import TicTacToeAreaController from '../../../../classes/interactable/TicTacToeAreaController';
 import { useInteractable, useInteractableAreaController } from '../../../../classes/TownController';
 import useTownController from '../../../../hooks/useTownController';
-import { InteractableID } from '../../../../types/CoveyTownSocket';
+import { GameStatus, InteractableID } from '../../../../types/CoveyTownSocket';
 import GameAreaInteractable from '../GameArea';
-
+import TicTacToeBoard from './TicTacToeBoard';
+import Leaderboard from '../Leaderboard';
+import PlayerController from '../../../../classes/PlayerController';
 /**
  * The TicTacToeArea component renders the TicTacToe game area.
  * It renders the current state of the area, optionally allowing the player to join the game.
@@ -17,7 +29,7 @@ import GameAreaInteractable from '../GameArea';
  * It subscribes to these events when the component mounts, and unsubscribes when the component unmounts. It also unsubscribes when the gameAreaController changes.
  *
  * It renders the following:
- * - A leaderboard (@see Leaderboard.tsx), which is passed the game history as a prop
+ * - A leaderboard , which is passed the game history as a prop
  * - A list of observers' usernames (in a list with the aria-label 'list of observers in the game', one username per-listitem)
  * - A list of players' usernames (in a list with the aria-label 'list of players in the game', one item for X and one for O)
  *    - If there is no player in the game, the username is '(No player yet!)'
@@ -38,10 +50,144 @@ import GameAreaInteractable from '../GameArea';
  *    - Our player lost: description 'You lost :('
  *
  */
+
+function ObserversList({ observers }: { observers: PlayerController[] }) {
+  return (
+    <List aria-label='list of observers in the game'>
+      {observers.map(observer => (
+        <ListItem key={(observer as PlayerController).id}>
+          {(observer as PlayerController).userName}
+        </ListItem>
+      ))}
+    </List>
+  );
+}
+
+function PlayersList({
+  xPlayer,
+  oPlayer,
+}: {
+  xPlayer: PlayerController | undefined;
+  oPlayer: PlayerController | undefined;
+}) {
+  return (
+    <List aria-label='list of players in the game'>
+      <ListItem>X: {xPlayer?.userName || '(No player yet!)'}</ListItem>
+      <ListItem>O: {oPlayer?.userName || '(No player yet!)'}</ListItem>
+    </List>
+  );
+}
+
 function TicTacToeArea({ interactableID }: { interactableID: InteractableID }): JSX.Element {
   const gameAreaController = useInteractableAreaController<TicTacToeAreaController>(interactableID);
-  // TODO - implement this component
-  return <>{gameAreaController.status}</>;
+  const [gameStatus, setGameStatus] = useState<GameStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const toast = useToast();
+  const [forceUpdate, setForceUpdate] = useState(0);
+
+  const gameUpdatedEventHandler = () => {
+    setGameStatus(gameAreaController.status);
+    setForceUpdate(prev => prev + 1);
+  };
+
+  const gameEndEventHandler = () => {
+    const winner = gameAreaController.winner;
+    if (
+      winner?.id.toLocaleLowerCase() ===
+      `player ${gameAreaController.gamePiece.toLocaleLowerCase()}`
+    ) {
+      toast({
+        title: 'Congratulations!',
+        description: 'You won!',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    } else if (winner) {
+      toast({
+        title: 'Game Over',
+        description: 'You lost :(',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } else {
+      toast({
+        title: 'Game Over',
+        description: 'Game ended in a tie',
+        status: 'info',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
+  useEffect(() => {
+    // Initialize game status on component mount
+    setGameStatus(gameAreaController.status);
+
+    gameAreaController.addListener('gameUpdated', gameUpdatedEventHandler);
+    gameAreaController.addListener('gameEnd', gameEndEventHandler);
+
+    return () => {
+      gameAreaController.removeListener('gameUpdated', gameUpdatedEventHandler);
+      gameAreaController.removeListener('gameEnd', gameEndEventHandler);
+    };
+  }, [gameAreaController, toast, forceUpdate]);
+
+  const handleJoinGame = async () => {
+    setIsLoading(true);
+    try {
+      await gameAreaController.joinGame();
+    } catch (error) {
+      if (error instanceof Error) {
+        toast({
+          title: 'Error',
+          description: `Error: ${error.message}`,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    }
+    setIsLoading(false);
+  };
+
+  if (!gameStatus) {
+    return <p>Loading...</p>;
+  }
+
+  const currentPlayerPiece = gameAreaController.gamePiece;
+  const currentPlayerID = gameAreaController.whoseTurn?.id;
+
+  let currentPlayerTurn = 'unknown player';
+  if (currentPlayerPiece && currentPlayerID === `player ${currentPlayerPiece.toLowerCase()}`) {
+    currentPlayerTurn = 'your';
+  } else if (gameAreaController.whoseTurn?.userName) {
+    currentPlayerTurn = `${gameAreaController.whoseTurn.userName}'s`;
+  }
+
+  const gameMessage =
+    gameStatus === 'IN_PROGRESS'
+      ? `Game in progress, ${gameAreaController.moveCount} moves in, currently ${currentPlayerTurn} turn.`
+      : `Game ${gameStatus === 'WAITING_TO_START' ? 'not yet started' : 'over'}.`;
+
+  return (
+    <div>
+      <Leaderboard results={gameAreaController.history} />
+      <ObserversList observers={gameAreaController.observers} />
+      <PlayersList xPlayer={gameAreaController.x} oPlayer={gameAreaController.o} />
+      <p>{gameMessage}</p>
+      {(gameStatus === 'WAITING_TO_START' || gameStatus === 'OVER') &&
+        !gameAreaController.isPlayer && (
+          <Button onClick={handleJoinGame} isLoading={isLoading}>
+            Join New Game
+          </Button>
+        )}
+
+      <TicTacToeBoard gameAreaController={gameAreaController} />
+    </div>
+  );
 }
 
 // Do not edit below this line

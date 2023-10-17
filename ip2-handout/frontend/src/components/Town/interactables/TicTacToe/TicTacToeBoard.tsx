@@ -1,6 +1,7 @@
-import { Button, chakra, Container } from '@chakra-ui/react';
+import { Button, chakra, Container, useToast } from '@chakra-ui/react';
 import React from 'react';
 import TicTacToeAreaController from '../../../../classes/interactable/TicTacToeAreaController';
+import { TicTacToeGridPosition } from '../../../../types/CoveyTownSocket';
 
 export type TicTacToeGameProps = {
   gameAreaController: TicTacToeAreaController;
@@ -54,7 +55,52 @@ const StyledTicTacToeBoard = chakra(Container, {
  * @param gameAreaController the controller for the TicTacToe game
  */
 export default function TicTacToeBoard({ gameAreaController }: TicTacToeGameProps): JSX.Element {
-  //TODO - implement this component (delete what's here first)
+  const toast = useToast();
+  const [isOurTurn, setIsOurTurn] = React.useState(gameAreaController.isOurTurn);
+
+  React.useEffect(() => {
+    const handleTurnChanged = (turn: boolean) => {
+      setIsOurTurn(turn);
+    };
+    gameAreaController.addListener('turnChanged', handleTurnChanged);
+
+    return () => {
+      gameAreaController.addListener('turnChanged', handleTurnChanged);
+    };
+  }, [gameAreaController]);
+
+  const handleCellClick = React.useCallback(
+    async (row: TicTacToeGridPosition, col: TicTacToeGridPosition) => {
+      if (gameAreaController.board[row][col]) {
+        toast({
+          title: 'Error',
+          description: 'Cell is already occupied!',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+        return;
+      }
+
+      if (!gameAreaController.isPlayer || !isOurTurn) return;
+
+      try {
+        await gameAreaController.makeMove(row, col);
+      } catch (error) {
+        if (error instanceof Error) {
+          toast({
+            title: 'Error',
+            description: error.message,
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          });
+        }
+      }
+    },
+    [gameAreaController, isOurTurn, toast],
+  );
+
   return (
     <StyledTicTacToeBoard aria-label='Tic-Tac-Toe Board'>
       <StyledTicTacToeSquare aria-label='Cell 0,0'>
